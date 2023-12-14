@@ -1,2 +1,2 @@
-# manachi
-Manachi Voxel Game
+# Voxel
+Voxel Game

@@ -12,7 +12,7 @@ use bevy::{
 use bevy_flycam::PlayerPlugin;
 use mesh::{LoadedChunks, MeshPlugin};
 use util::Position;
-use world::{despawn_handler, render_distance_handler};
+use world::WorldPlugin;
 
 #[derive(Component)]
 struct FpsText;
@@ -31,8 +31,7 @@ fn main() {
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(PlayerPlugin)
         .add_plugins(MeshPlugin)
-        .add_systems(Update, despawn_handler)
-        .add_systems(Update, render_distance_handler)
+        .add_plugins(WorldPlugin)
         .add_systems(Update, fps_text_update_system)
         .add_systems(Startup, setup)
         .run();

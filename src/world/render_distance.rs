@@ -32,6 +32,8 @@ pub fn render_distance_handler(
 
     let mut position = HashSet::new();
 
+    //todo: start at the player's position and work outwards
+
     for x in chunk_x - RENDER_DISTANCE..=chunk_x + RENDER_DISTANCE {
         for y in chunk_y - RENDER_DISTANCE..=chunk_y + RENDER_DISTANCE {
             for z in chunk_z - RENDER_DISTANCE..=chunk_z + RENDER_DISTANCE {

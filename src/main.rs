@@ -1,18 +1,15 @@
 pub mod mesh;
 
-use std::{
-    f32::consts::PI,
-    sync::{Arc, Mutex},
-};
+use std::f32::consts::PI;
 
 use bevy::{
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
-    window::PresentMode, utils::{HashMap, HashSet},
+    utils::{HashMap, HashSet},
+    window::PresentMode,
 };
 use bevy_flycam::{FlyCam, MovementSettings, NoCameraPlayerPlugin};
 use mesh::{mesh_loader, mesh_unloader, mesher, ChunkLoadEvent, ChunkUnloadEvent};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 const CHUNK_SIZE: f32 = 24.0;
 const VOXEL_SIZE: f32 = 1.0;
@@ -40,6 +37,7 @@ impl Chunk {
 struct FpsText;
 
 #[derive(Resource, Default)]
+
 pub struct LoadedChunks(pub HashMap<Position, Entity>);
 fn main() {
     App::new()
@@ -49,7 +47,7 @@ fn main() {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Voxel".to_string(),
-                present_mode: PresentMode::AutoNoVsync,
+                present_mode: PresentMode::AutoVsync,
                 resizable: true,
                 ..default()
             }),
@@ -178,38 +176,27 @@ fn test(
 
     let radius = 5;
 
-    let position = Arc::new(Mutex::new(HashSet::new()));
+    let mut position = HashSet::new();
 
-    (chunk_x - radius..=chunk_x + radius)
-    .into_par_iter()
-    .for_each(|x| {
-        (chunk_y - radius..=chunk_y + radius)
-            .into_par_iter()
-            .for_each(|y| {
-                (chunk_z - radius..=chunk_z + radius)
-                    .into_par_iter()
-                    .for_each(|z| {
-                        let chunk_position = Position { x, y, z };
-                        position.lock().unwrap().insert(chunk_position);
+    for x in chunk_x - radius..=chunk_x + radius {
+        for y in chunk_y - radius..=chunk_y + radius {
+            for z in chunk_z - radius..=chunk_z + radius {
+                let chunk_position = Position { x, y, z };
+                position.insert(chunk_position);
+                if !loaded_chunks.0.contains_key(&chunk_position) {
+                    chunk_load_event.send(ChunkLoadEvent {
+                        position: chunk_position,
                     });
+                }
+            }
+        }
+    }
+
+    for (chunk_position, _) in loaded_chunks.0.iter() {
+        if !position.contains(chunk_position) {
+            chunk_unload_event.send(ChunkUnloadEvent {
+                position: *chunk_position,
             });
-    });
-
-let position = Arc::try_unwrap(position).unwrap().into_inner().unwrap();
-
-for (chunk_position, _) in loaded_chunks.0.iter() {
-    if !position.contains(chunk_position) {
-        chunk_unload_event.send(ChunkUnloadEvent {
-            position: *chunk_position,
-        });
+        }
     }
-}
-
-for chunk_position in position.iter() {
-    if !loaded_chunks.0.contains_key(chunk_position) {
-        chunk_load_event.send(ChunkLoadEvent {
-            position: *chunk_position,
-        });
-    }
-}
 }

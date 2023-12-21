@@ -35,21 +35,26 @@ pub fn mesher(
 ) {
     for (entity, mut task) in tasks.iter_mut() {
         if let Some((mesh, position)) = block_on(future::poll_once(&mut task.0)) {
-            commands
-                .entity(entity)
-                .insert(PbrBundle {
-                    mesh: meshes.add(mesh),
-                    material: materials.add(StandardMaterial::default()),
-                    transform: Transform::from_translation(Vec3::new(
-                        position.x as f32 * CHUNK_SIZE,
-                        position.y as f32 * CHUNK_SIZE,
-                        position.z as f32 * CHUNK_SIZE,
-                    )),
-                    ..Default::default()
-                })
-                .insert(Chunk::new(position));
-            let id = commands.entity(entity).remove::<ComputeTransform>().id();
-            loaded_chunks.0.insert(position, id);
+            commands.entity(entity).remove::<ComputeTransform>();
+            let entity = commands.get_entity(entity);
+
+            if let Some(mut entity) = entity {
+                let id = entity
+                    .try_insert(PbrBundle {
+                        mesh: meshes.add(mesh),
+                        material: materials.add(StandardMaterial::default()),
+                        transform: Transform::from_translation(Vec3::new(
+                            position.x as f32 * CHUNK_SIZE,
+                            position.y as f32 * CHUNK_SIZE,
+                            position.z as f32 * CHUNK_SIZE,
+                        )),
+                        ..Default::default()
+                    })
+                    .try_insert(Chunk::new(position))
+                    .id();
+
+                loaded_chunks.0.insert(position, id);
+            }
         }
     }
 }
@@ -71,20 +76,17 @@ pub fn mesh_loader(
             let positions = Arc::new(Mutex::new(Vec::new()));
             let indices = Arc::new(Mutex::new(Vec::new()));
             let normals = Arc::new(Mutex::new(Vec::new()));
-            let uvs = Arc::new(Mutex::new(Vec::new()));
             let colors = Arc::new(Mutex::new(Vec::new()));
 
             result.iter().for_each(|face| {
                 let mut positions = positions.lock().unwrap();
                 let mut indices = indices.lock().unwrap();
                 let mut normals = normals.lock().unwrap();
-                let mut uvs = uvs.lock().unwrap();
                 let mut colors = colors.lock().unwrap();
 
                 indices.extend_from_slice(&face.indices(positions.len() as u32));
                 positions.extend_from_slice(&face.positions(VOXEL_SIZE));
                 normals.extend_from_slice(&face.normals());
-                uvs.extend_from_slice(&face.uvs(false, true));
                 colors.extend_from_slice(&face.colors());
             });
 
@@ -93,20 +95,18 @@ pub fn mesh_loader(
             let indices = Arc::try_unwrap(indices).unwrap().into_inner().unwrap();
             let positions = Arc::try_unwrap(positions).unwrap().into_inner().unwrap();
             let normals = Arc::try_unwrap(normals).unwrap().into_inner().unwrap();
-            let uvs = Arc::try_unwrap(uvs).unwrap().into_inner().unwrap();
             let colors = Arc::try_unwrap(colors).unwrap().into_inner().unwrap();
 
             mesh.set_indices(Some(Indices::U32(indices)));
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
             mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
             mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
 
             (mesh, chunk_mesh.position)
         });
 
-        let entity = commands.spawn(ComputeTransform(task)).id();
-        loaded_chunks.0.insert(event.position, entity);
+        let id = commands.spawn(ComputeTransform(task)).id();
+        loaded_chunks.0.insert(event.position, id);
     }
 }
 
@@ -117,8 +117,11 @@ pub fn mesh_unloader(
 ) {
     for event in chunk_unload_event.read() {
         if let Some(entity) = loaded_chunks.0.remove(&event.position) {
-            commands.entity(entity).despawn();
+            if let Some(mut entity) = commands.get_entity(entity) {
+                entity.despawn();
+            }
+        } else {
+            panic!("Chunk not loaded");
         }
     }
 }
-

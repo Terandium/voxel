@@ -1,6 +1,8 @@
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use super::{voxel::Color, Face};
+use crate::util::Color;
+
+use super::Face;
 
 /// A quad is a rectangle in the voxel grid.
 #[derive(Copy, Clone, Debug)]
@@ -27,5 +29,8 @@ impl QuadGroups {
                 side: index.into(),
                 quad,
             })
+    }
+    pub fn is_empty(&self) -> bool {
+        self.groups.par_iter().all(|group| group.is_empty())
     }
 }

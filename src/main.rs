@@ -1,49 +1,24 @@
 pub mod mesh;
+pub mod util;
+pub mod world;
 
 use std::f32::consts::PI;
 
 use bevy::{
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
-    utils::{HashMap, HashSet},
     window::PresentMode,
 };
-use bevy_flycam::{FlyCam, MovementSettings, NoCameraPlayerPlugin};
-use mesh::{mesh_loader, mesh_unloader, mesher, ChunkLoadEvent, ChunkUnloadEvent};
+use bevy_flycam::PlayerPlugin;
+use mesh::{LoadedChunks, MeshPlugin};
+use util::Position;
+use world::{despawn_handler, render_distance_handler};
 
-const CHUNK_SIZE: f32 = 24.0;
-const VOXEL_SIZE: f32 = 1.0;
-
-#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, Hash)]
-pub struct Position {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-}
-
-#[derive(Component, Eq, PartialEq)]
-pub struct Chunk {
-    pub position: Position,
-}
-
-impl Chunk {
-    pub fn new(position: Position) -> Self {
-        Self { position }
-    }
-}
-
-/// Marker to find the text entity so we can update it
 #[derive(Component)]
 struct FpsText;
 
-#[derive(Resource, Default)]
-
-pub struct LoadedChunks(pub HashMap<Position, Entity>);
 fn main() {
     App::new()
-        .init_resource::<LoadedChunks>()
-        .add_event::<ChunkLoadEvent>()
-        .add_event::<ChunkUnloadEvent>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Voxel".to_string(),
@@ -54,29 +29,18 @@ fn main() {
             ..default()
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .insert_resource(MovementSettings {
-            sensitivity: 0.00012,
-            speed: 75.0,
-        })
-        .add_plugins(NoCameraPlayerPlugin)
-        .add_systems(Startup, setup)
-        .add_systems(Update, mesh_loader)
-        .add_systems(Update, mesh_unloader)
-        .add_systems(Update, mesher)
-        .add_systems(Update, test)
+        .add_plugins(PlayerPlugin)
+        .add_plugins(MeshPlugin)
+        .add_systems(Update, despawn_handler)
+        .add_systems(Update, render_distance_handler)
         .add_systems(Update, fps_text_update_system)
+        .add_systems(Startup, setup)
         .run();
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 2.0, 0.5),
-            ..default()
-        },
-        FlyCam,
-    ));
+//todo: all of this below will be removed eventually anyways so no need to move it to a different file
 
+fn setup(mut commands: Commands) {
     // directional 'sun' light
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
@@ -155,48 +119,6 @@ fn fps_text_update_system(
             // add an extra space to preserve alignment
             text.sections[1].value = " N/A".into();
             text.sections[1].style.color = Color::WHITE;
-        }
-    }
-}
-
-fn test(
-    query: Query<&Transform, With<FlyCam>>,
-    mut chunk_load_event: EventWriter<ChunkLoadEvent>,
-    mut chunk_unload_event: EventWriter<ChunkUnloadEvent>,
-    loaded_chunks: Res<LoadedChunks>,
-) {
-    let transform = query.get_single().expect("There should be a camera");
-
-    let (x, y, z) = transform.translation.into();
-    let (chunk_x, chunk_y, chunk_z) = (
-        (x / CHUNK_SIZE).floor() as i32,
-        (y / CHUNK_SIZE).floor() as i32,
-        (z / CHUNK_SIZE).floor() as i32,
-    );
-
-    let radius = 5;
-
-    let mut position = HashSet::new();
-
-    for x in chunk_x - radius..=chunk_x + radius {
-        for y in chunk_y - radius..=chunk_y + radius {
-            for z in chunk_z - radius..=chunk_z + radius {
-                let chunk_position = Position { x, y, z };
-                position.insert(chunk_position);
-                if !loaded_chunks.0.contains_key(&chunk_position) {
-                    chunk_load_event.send(ChunkLoadEvent {
-                        position: chunk_position,
-                    });
-                }
-            }
-        }
-    }
-
-    for (chunk_position, _) in loaded_chunks.0.iter() {
-        if !position.contains(chunk_position) {
-            chunk_unload_event.send(ChunkUnloadEvent {
-                position: *chunk_position,
-            });
         }
     }
 }

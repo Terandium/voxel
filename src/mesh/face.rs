@@ -1,4 +1,4 @@
-use super::{side::Axis, Quad, Side};
+use super::{side::Axis, Quad, Side, VOXEL_SIZE};
 
 pub struct Face<'a> {
     pub side: Side,
@@ -14,7 +14,7 @@ impl<'a> Face<'a> {
         [start, start + 2, start + 1, start + 1, start + 2, start + 3]
     }
 
-    pub fn positions(&self, voxel_size: f32) -> [[f32; 3]; 4] {
+    pub fn positions(&self) -> [[f32; 3]; 4] {
         let positions = match (&self.side.axis, &self.side.positive) {
             (Axis::X, false) => [
                 [-0.5, -0.5, 0.5],
@@ -59,6 +59,8 @@ impl<'a> Face<'a> {
             (self.quad.voxel[1] - 1) as f32,
             (self.quad.voxel[2] - 1) as f32,
         );
+
+        let voxel_size = VOXEL_SIZE;
 
         [
             [

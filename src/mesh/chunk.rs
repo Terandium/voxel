@@ -1,21 +1,31 @@
-use bevy::ecs::event::Event;
+use bevy::{
+    ecs::{component::Component, entity::Entity, system::Resource},
+    utils::HashMap,
+};
 use libnoise::prelude::*;
 
 use crate::{
-    mesh::{Quad, Visibility},
-    Position, CHUNK_SIZE,
+    mesh::Quad,
+    util::{Color, Visibility, EMPTY, OPAQUE, TRANSPARENT},
+    Position,
 };
 
-use super::{voxel::Color, QuadGroups, Voxel, EMPTY, OPAQUE, TRANSPARENT};
+use super::{QuadGroups, Voxel};
 
-#[derive(Event)]
-pub struct ChunkLoadEvent {
+pub const CHUNK_SIZE: f32 = 24.0;
+
+#[derive(Resource, Default)]
+pub struct LoadedChunks(pub HashMap<Position, Entity>);
+
+#[derive(Component, Eq, PartialEq)]
+pub struct Chunk {
     pub position: Position,
 }
 
-#[derive(Event)]
-pub struct ChunkUnloadEvent {
-    pub position: Position,
+impl Chunk {
+    pub fn new(position: Position) -> Self {
+        Self { position }
+    }
 }
 
 #[derive(Clone, Debug)]

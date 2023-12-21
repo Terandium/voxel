@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.12", features = ["dynamic_linking"] } #Remove on release
+bevy = { version = "0.12" } #Remove on release
 bevy_flycam = "*"
 libnoise = "1.0"
 rayon = "1.8.0"

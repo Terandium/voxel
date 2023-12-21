@@ -31,6 +31,7 @@ pub fn mesher(
     mut tasks: Query<(Entity, &mut ComputeTransform)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut loaded_chunks: ResMut<LoadedChunks>,
 ) {
     for (entity, mut task) in tasks.iter_mut() {
         if let Some((mesh, position)) = block_on(future::poll_once(&mut task.0)) {
@@ -47,7 +48,8 @@ pub fn mesher(
                     ..Default::default()
                 })
                 .insert(Chunk::new(position));
-            commands.entity(entity).remove::<ComputeTransform>();
+            let id = commands.entity(entity).remove::<ComputeTransform>().id();
+            loaded_chunks.0.insert(position, id);
         }
     }
 }
@@ -103,8 +105,8 @@ pub fn mesh_loader(
             (mesh, chunk_mesh.position)
         });
 
-        commands.spawn(ComputeTransform(task));
-        loaded_chunks.0.push(Chunk::new(event.position));
+        let entity = commands.spawn(ComputeTransform(task)).id();
+        loaded_chunks.0.insert(event.position, entity);
     }
 }
 
@@ -112,17 +114,11 @@ pub fn mesh_unloader(
     mut commands: Commands,
     mut chunk_unload_event: EventReader<ChunkUnloadEvent>,
     mut loaded_chunks: ResMut<LoadedChunks>,
-    mut query: Query<(Entity, &Chunk)>,
 ) {
     for event in chunk_unload_event.read() {
-        for (entity, chunk) in query.iter_mut() {
-            if chunk.position == event.position {
-                commands.entity(entity).despawn();
-                loaded_chunks
-                    .0
-                    .retain(|chunk| chunk.position != event.position);
-                continue;
-            }
+        if let Some(entity) = loaded_chunks.0.remove(&event.position) {
+            commands.entity(entity).despawn();
         }
     }
 }
+

@@ -8,7 +8,7 @@ use std::{
 use bevy::{
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
     prelude::*,
-    window::PresentMode,
+    window::PresentMode, utils::{HashMap, HashSet},
 };
 use bevy_flycam::{FlyCam, MovementSettings, NoCameraPlayerPlugin};
 use mesh::{mesh_loader, mesh_unloader, mesher, ChunkLoadEvent, ChunkUnloadEvent};
@@ -17,7 +17,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 const CHUNK_SIZE: f32 = 24.0;
 const VOXEL_SIZE: f32 = 1.0;
 
-#[derive(Default, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -40,7 +40,7 @@ impl Chunk {
 struct FpsText;
 
 #[derive(Resource, Default)]
-pub struct LoadedChunks(pub Vec<Chunk>);
+pub struct LoadedChunks(pub HashMap<Position, Entity>);
 fn main() {
     App::new()
         .init_resource::<LoadedChunks>()
@@ -176,38 +176,40 @@ fn test(
         (z / CHUNK_SIZE).floor() as i32,
     );
 
-    let radius = 6;
+    let radius = 5;
 
-    let position = Arc::new(Mutex::new(Vec::new()));
+    let position = Arc::new(Mutex::new(HashSet::new()));
 
     (chunk_x - radius..=chunk_x + radius)
-        .into_par_iter()
-        .for_each(|x| {
-            (chunk_y - radius..=chunk_y + radius)
-                .into_par_iter()
-                .for_each(|y| {
-                    (chunk_z - radius..=chunk_z + radius)
-                        .into_par_iter()
-                        .for_each(|z| {
-                            let chunk_position = Position { x, y, z };
-                            position.lock().unwrap().push(chunk_position);
-                        });
-                });
+    .into_par_iter()
+    .for_each(|x| {
+        (chunk_y - radius..=chunk_y + radius)
+            .into_par_iter()
+            .for_each(|y| {
+                (chunk_z - radius..=chunk_z + radius)
+                    .into_par_iter()
+                    .for_each(|z| {
+                        let chunk_position = Position { x, y, z };
+                        position.lock().unwrap().insert(chunk_position);
+                    });
+            });
+    });
+
+let position = Arc::try_unwrap(position).unwrap().into_inner().unwrap();
+
+for (chunk_position, _) in loaded_chunks.0.iter() {
+    if !position.contains(chunk_position) {
+        chunk_unload_event.send(ChunkUnloadEvent {
+            position: *chunk_position,
         });
-
-    for chunk in loaded_chunks.0.iter() {
-        if !position.lock().unwrap().contains(&chunk.position) {
-            chunk_unload_event.send(ChunkUnloadEvent {
-                position: chunk.position,
-            });
-        }
     }
+}
 
-    for position in position.lock().unwrap().iter() {
-        if !loaded_chunks.0.contains(&Chunk::new(*position)) {
-            chunk_load_event.send(ChunkLoadEvent {
-                position: *position,
-            });
-        }
+for chunk_position in position.iter() {
+    if !loaded_chunks.0.contains_key(chunk_position) {
+        chunk_load_event.send(ChunkLoadEvent {
+            position: *chunk_position,
+        });
     }
+}
 }

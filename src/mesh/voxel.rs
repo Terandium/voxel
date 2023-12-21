@@ -1,5 +1,6 @@
 use crate::util::{Color, Visibility};
 
+/// The size of a voxel
 pub const VOXEL_SIZE: f32 = 1.0;
 
 #[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]

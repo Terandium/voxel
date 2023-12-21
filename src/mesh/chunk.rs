@@ -143,8 +143,6 @@ impl ChunkMesh {
                                     if generate {
                                         buffer.groups[i].push(Quad {
                                             voxel: [x, y, z],
-                                            width: 1,
-                                            height: 1,
                                             color,
                                         });
                                     }

@@ -15,7 +15,7 @@ use crate::{
 
 use super::{QuadGroups, Voxel};
 
-pub const CHUNK_SIZE: f32 = 24.0;
+pub const CHUNK_SIZE: f32 = 48.0;
 
 #[derive(Resource, Default)]
 pub struct LoadedChunks(pub HashMap<Position, Entity>);
@@ -109,7 +109,7 @@ impl ChunkMesh {
     pub fn generate_mesh(&self) -> QuadGroups {
         let buffer = Arc::new(Mutex::new(QuadGroups::default()));
 
-        for i in 0..ChunkMesh::size() {
+        (0..ChunkMesh::size()).into_par_iter().for_each(|i| {
             let (x, y, z) = ChunkMesh::delinearize(i);
             if (x > 0 && x < ChunkMesh::X - 1)
                 && (y > 0 && y < ChunkMesh::Y - 1)
@@ -118,7 +118,7 @@ impl ChunkMesh {
                 let voxel = self.get(x, y, z);
 
                 match voxel.visibility() {
-                    Visibility::Empty => continue,
+                    Visibility::Empty => return,
                     visibility => {
                         let neighbors = [
                             self.get(x - 1, y, z),
@@ -161,7 +161,7 @@ impl ChunkMesh {
                     }
                 }
             }
-        }
+        });
 
         let mut out = QuadGroups::default();
         out.groups = buffer.lock().unwrap().groups.clone();

@@ -12,12 +12,12 @@ use bevy::{
 use bevy_flycam::FlyCam;
 
 use crate::{
-    mesh::{ChunkLoadEvent, ChunkUnloadEvent, LoadedChunks, CHUNK_SIZE},
+    mesh::{ChunkLoadEvent, ChunkUnloadEvent, LoadedChunks, CHUNK_SIZE, VOXEL_SIZE},
     util::Position,
 };
 
 /// The render distance in chunks.
-pub const RENDER_DISTANCE: i32 = 12;
+pub const RENDER_DISTANCE: i32 = 5;
 
 // This system handles loading and unloading chunks based on the player's position.
 // Uses a breadth-first search to find all chunks within the render distance.
@@ -36,9 +36,9 @@ pub fn render_distance_handler(
 
     // Calculate the chunk coordinates the camera is currently in.
     let (chunk_x, chunk_y, chunk_z) = (
-        (transform.translation.x / CHUNK_SIZE).floor() as i32,
-        (transform.translation.y / CHUNK_SIZE).floor() as i32,
-        (transform.translation.z / CHUNK_SIZE).floor() as i32,
+        (transform.translation.x / CHUNK_SIZE / VOXEL_SIZE).floor() as i32,
+        (transform.translation.y / CHUNK_SIZE / VOXEL_SIZE).floor() as i32,
+        (transform.translation.z / CHUNK_SIZE / VOXEL_SIZE).floor() as i32,
     );
 
     // Initialize a queue, a visited set, and a to_be_loaded set.
@@ -65,7 +65,7 @@ pub fn render_distance_handler(
             // If the position is not in the loaded chunks...
             if !loaded_chunks.0.contains_key(&position) {
                 // Send a chunk load event for the position.
-                chunk_load_event.send(ChunkLoadEvent { position: position });
+                chunk_load_event.send(ChunkLoadEvent { position });
             }
 
             // For each neighbor of the position...

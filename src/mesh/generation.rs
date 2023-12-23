@@ -16,7 +16,7 @@ use bevy::{
 
 use crate::{world::Despawn, Position};
 
-use super::{Chunk, CHUNK_SIZE};
+use super::{Chunk, CHUNK_SIZE, VOXEL_SIZE};
 
 // Public struct `ComputeTransform` that wraps a `Task` which returns an `Option<Mesh>` and a `Position`.
 #[derive(Component)]
@@ -49,9 +49,9 @@ pub fn mesher(
                                 mesh: meshes.add(mesh),
                                 material: materials.add(StandardMaterial::default()),
                                 transform: Transform::from_translation(Vec3::new(
-                                    position.x as f32 * CHUNK_SIZE,
-                                    position.y as f32 * CHUNK_SIZE,
-                                    position.z as f32 * CHUNK_SIZE,
+                                    position.x as f32 * CHUNK_SIZE * VOXEL_SIZE,
+                                    position.y as f32 * CHUNK_SIZE * VOXEL_SIZE,
+                                    position.z as f32 * CHUNK_SIZE * VOXEL_SIZE,
                                 )),
                                 ..Default::default()
                             })

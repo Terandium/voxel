@@ -1,8 +1,11 @@
+use std::sync::{Arc, Mutex};
+
 use bevy::{
     ecs::{component::Component, entity::Entity, system::Resource},
     utils::HashMap,
 };
-use libnoise::prelude::*;
+use noise::{NoiseFn, Perlin};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
 use crate::{
     mesh::Quad,
@@ -64,15 +67,12 @@ impl ChunkMesh {
         self.voxels[Self::linearize(x, y, z)]
     }
 
-    pub fn populate(&mut self, seed: u64) {
-        let generator = Source::simplex(seed)
-            .fbm(4, 0.01, 2.0, 0.8)
-            .blend(
-                Source::worley(seed + 1).scale([0.05, 0.05]),
-                Source::worley(seed + 2).scale([0.02, 0.02]),
-            )
-            .lambda(|f| ((f * 2.0).sin() * 0.3 + f * 0.7) * 20.0);
+    pub fn is_empty(&self) -> bool {
+        self.voxels.iter().all(|voxel| *voxel == Voxel::Empty)
+    }
 
+    pub fn populate(&mut self, seed: u32) {
+        let perlin = Perlin::new(seed);
         for i in 0..ChunkMesh::size() {
             let (local_x, local_y, local_z) = ChunkMesh::delinearize(i);
 
@@ -82,28 +82,32 @@ impl ChunkMesh {
                 local_z as i32 + &self.position.z * CHUNK_SIZE as i32,
             );
 
-            let val = generator.sample([x as f64, z as f64]);
+            let scale1 = 0.1;
+            let scale2 = 0.01;
+            let scale3 = 0.001;
 
-            if y <= 1 {
-                self.voxels.push(Voxel::Opaque(Color::new(0, 0, 255)));
-            } else {
-                if y <= val as i32 || y <= 1 {
-                    if y <= 3 {
-                        self.voxels.push(Voxel::Opaque(Color::new(242, 231, 122)));
-                    } else if y <= 20 {
-                        self.voxels.push(Voxel::Opaque(Color::new(146, 142, 133)));
-                    } else {
-                        self.voxels.push(Voxel::Opaque(Color::new(255, 250, 250)));
-                    }
+            let val = perlin.get([x as f64 * scale1, z as f64 * scale1])
+                + perlin.get([x as f64 * scale2, z as f64 * scale2])
+                + perlin.get([x as f64 * scale3, z as f64 * scale3]);
+
+            let val = val * 5.0;
+
+            if y <= val as i32 {
+                if y <= 3 {
+                    self.voxels.push(Voxel::Opaque(Color::new(242, 231, 122)));
+                } else if y <= 20 {
+                    self.voxels.push(Voxel::Opaque(Color::new(146, 142, 133)));
                 } else {
-                    self.voxels.push(Voxel::Empty);
+                    self.voxels.push(Voxel::Opaque(Color::new(255, 250, 250)));
                 }
+            } else {
+                self.voxels.push(Voxel::Empty);
             }
         }
     }
 
     pub fn generate_mesh(&self) -> QuadGroups {
-        let mut buffer = QuadGroups::default();
+        let buffer = Arc::new(Mutex::new(QuadGroups::default()));
 
         for i in 0..ChunkMesh::size() {
             let (x, y, z) = ChunkMesh::delinearize(i);
@@ -125,36 +129,43 @@ impl ChunkMesh {
                             self.get(x, y, z + 1),
                         ];
 
-                        for (i, neighbor) in neighbors.into_iter().enumerate() {
-                            let other = neighbor.visibility();
+                        neighbors
+                            .into_par_iter()
+                            .enumerate()
+                            .for_each(|(i, neighbor)| {
+                                let other = neighbor.visibility();
 
-                            let generate = match (visibility, other) {
-                                (OPAQUE, EMPTY) | (OPAQUE, TRANSPARENT) | (TRANSPARENT, EMPTY) => {
-                                    true
-                                }
+                                let generate = match (visibility, other) {
+                                    (OPAQUE, EMPTY)
+                                    | (OPAQUE, TRANSPARENT)
+                                    | (TRANSPARENT, EMPTY) => true,
 
-                                (TRANSPARENT, TRANSPARENT) => voxel != neighbor,
+                                    (TRANSPARENT, TRANSPARENT) => voxel != neighbor,
 
-                                (_, _) => false,
-                            };
+                                    (_, _) => false,
+                                };
 
-                            match voxel {
-                                Voxel::Opaque(color) | Voxel::Transparent(color) => {
-                                    if generate {
-                                        buffer.groups[i].push(Quad {
-                                            voxel: [x, y, z],
-                                            color,
-                                        });
+                                match voxel {
+                                    Voxel::Opaque(color) | Voxel::Transparent(color) => {
+                                        if generate {
+                                            let mut buffer = buffer.lock().unwrap();
+                                            buffer.groups[i].push(Quad {
+                                                voxel: [x, y, z],
+                                                color,
+                                            });
+                                        }
                                     }
+                                    _ => {}
                                 }
-                                _ => {}
-                            }
-                        }
+                            });
                     }
                 }
             }
         }
 
-        buffer
+        let mut out = QuadGroups::default();
+        out.groups = buffer.lock().unwrap().groups.clone();
+
+        out
     }
 }
